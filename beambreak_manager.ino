@@ -12,6 +12,8 @@
  *
  **************************************************************/
 
+
+
 #include "Queue.h"
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -21,24 +23,21 @@
 #define LEDPIN 13 // Pin 13: Arduino has an LED connected on pin 13
 #define SENSORPIN1 4
 #define SENSORPIN2 5
-const int DISTANCE = 33;
+const int BEAM_DISTANCE = 35; // millimeters
+// distance from the beam compartment to the beginning of the magnetic field
+const int MAGNETICE_FIELD_DISTANCE = 35; // millimeters
+// distance from the beam compartment to the center of the magnetic field
+const int MAGNETICE_FIELD_CENTER_DISTANCE = 35; // millimeters
 
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 //   Necessary data structures
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 typedef struct doubleBeamCompartment {
    int sensorpin1;
    int sensorpin2;
-   
-   // defines the first set of sensors the ball encounters
-   int sensorstate1;
-   int laststate1;
-
-  // defines the second set of sensors the ball encounters
-   int sensorstate2;
-   int laststate2;
 } doubleBeamCompartment;
 
 Queue<doubleBeamCompartment> sensor_queue(4);
@@ -48,16 +47,25 @@ Queue<doubleBeamCompartment> sensor_queue(4);
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 //   Variables that will change throughout the program's lifetime
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+// defines the first set of sensors the ball encounters
 int curr_sensor1; // entering beam compartment
 int curr_sensorState1 = 0, curr_lastState1 = 0;
 
+// defines the second set of sensors the ball encounters
 int curr_sensor2; // exiting beam compartment
 int curr_sensorState2 = 0, curr_lastState2 = 0;
-   
+
+// used for calcaluting the time at which the ball will first 
+// enter the magnetic field and when it will be at the center of it
 unsigned long first_timestamp = 0, second_timestamp = 0;
 unsigned long time_interval = 0;
 float velocity = 0;
 bool is_velocity_calculated = false;
+
+// the times at which the ball will first enter the mag field
+// and when it will be in the center of it
+float t3 = 0, t4 = 0; 
 
 
 
@@ -66,18 +74,86 @@ bool is_velocity_calculated = false;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 /*
-calculateVelocity
-Parameters: The recorded timestamps for each sensor in a compartment
-Purpose: Calculates velocity of the ball
-Returns: Nothing
-Effects: Modifies the value stored insider the "velocity" variable
+* calculateVelocity
+* Parameters: The recorded timestamps for each sensor in a compartment
+* Purpose: Calculates velocity of the ball
+* Returns: Nothing
+* Effects: Modifies the value stored insider the "velocity" variable
 */
-bool calculateVelocity(unsigned long t1, unsigned long t2) {
-  time_interval = t2 - t1;
-  velocity = DISTANCE / (float) time_interval;
+bool calculateVelocity() {
+  time_interval = first_timestamp - second_timestamp;
+  velocity = BEAM_DISTANCE / (float) time_interval;
   return true;
 }
 
+/*
+* calculateElectromagnetActivationTimes
+* Parameters: The current velocity of the ball
+* Purpose: Calculates the time at which the program should turn on the elctromagnet
+* Returns: Nothing
+* Effects: Modifies the value stored inside "t3" and "t4"
+*/
+void calculateElectromagnetActivationTimes() {
+  t3 = MAGNETICE_FIELD_DISTANCE / velocity;
+  t4 = MAGNETICE_FIELD_CENTER_DISTANCE / velocity;
+}
+
+/*
+* checkTime
+* Parameters: None
+* Purpose: Calculates the time at which the program should turn on the elctromagnet
+* Returns: Nothing
+* Effects: Modifies the value stored inside "t3" and "t4"
+*/
+float checkTime() {
+  return millis() - second_timestamp;
+}
+
+/*
+* activateElectromagnet
+* Parameters: None
+* Purpose: Activates an electromagnet based on time interval from
+*             second_timestamp to now  
+* Returns: Nothing
+* Effects: Once the time interval from second_timestamp to now is 
+*             equal to t3, the electromagnet corresponding to the 
+*             pair of beam break sensors is activated
+*/
+bool activateElectromagnet() {
+  if (checkTime() < t3) {
+    return false;
+  } else {
+    Serial.println("Activated electromagnet");
+  }
+  return true;
+}
+
+/*
+* deactivateElectromagnet
+* Parameters: None
+* Purpose: Deactivates an electromagnet based on time interval from
+*             second_timestamp to now  
+* Returns: Nothing
+* Effects: Once the time interval from second_timestamp to now is 
+*             equal to t4, the electromagnet corresponding to the 
+*             pair of beam break sensors is deactivated
+*/
+bool deactivateElectromagnet() {
+  if (checkTime() < t4) {
+    return true;
+  } else {
+    Serial.println("Deactivated electromagnet");
+  }
+  return false;
+}
+
+
+
+
+
+/*************************************************************************/
+/*                              MAIN PROGRAM                             */
+/*************************************************************************/
 
 void setup() {
   Serial.begin(9600);
@@ -95,7 +171,7 @@ void setup() {
 
   Serial.print("Setting up sensor data structures...");
 
-  sensor_queue.push(doubleBeamCompartment{SENSORPIN1, SENSORPIN2, 0, 0, 0, 0});
+  sensor_queue.push(doubleBeamCompartment{SENSORPIN1, SENSORPIN2});
 
   doubleBeamCompartment temp = sensor_queue.pop();
   curr_sensor1 = temp.sensorpin1;
@@ -147,18 +223,37 @@ void loop(){
   if (!curr_sensorState2 && curr_lastState2) {
     Serial.println("Broken2");
     second_timestamp = millis();
-    is_velocity_calculated = calculateVelocity(first_timestamp, second_timestamp);
+    is_velocity_calculated = calculateVelocity();
     Serial.println("set to true");
   }
   curr_lastState2 = curr_sensorState2;
 
-  if (is_velocity_calculated == true) {
-    sensor_queue.push(doubleBeamCompartment{curr_sensor1, curr_sensor2, 0, 0, 0, 0});
+  if (is_velocity_calculated == true) {    
+    // grabbing the next set of sensor to monitor and pushing the current sensors
+    // to the back of the queue
+    sensor_queue.push(doubleBeamCompartment{curr_sensor1, curr_sensor2});
     doubleBeamCompartment temp = sensor_queue.pop();
     curr_sensor1 = temp.sensorpin1;
-    curr_sensor2 = temp.sensorpin2;    
+    curr_sensor2 = temp.sensorpin2;
+
+    // reseting the sensor state variables to prep for the next pair of beams
+    curr_sensorState1 = 0;
+    curr_lastState1 = 0;
+    curr_sensorState2 = 0;
+    curr_lastState2 = 0;
+
     Serial.println("This is it: ");
     Serial.println(velocity);
     is_velocity_calculated = false;
+    
+    bool activated_electromagnet = false;
+    bool deactivated_electromagnet = true;
+    // setting this timestamp to more recent time to calculate t3 and t4
+    second_timestamp = millis();
+    calculateElectromagnetActivationTimes();
+    while (activated_electromagnet != true && deactivated_electromagnet != false) {
+      activated_electromagnet = activateElectromagnet();
+      deactivated_electromagnet = deactivateElectromagnet();
+    }
   }
 }
