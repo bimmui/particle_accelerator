@@ -1,7 +1,16 @@
-/* 
-  IR Breakbeam sensor demo!
-*/
-
+/**************************************************************
+ *
+ *                     beambreak_manager.ino
+ *
+ *     Assignment: Comp Phys Final Project (Phys 68)
+ *     Author(s):  Daniel Opara
+ *     Date:       4/16/2023
+ *
+ *     Overview: Driver code for the particle acclerator. Activates electromagnets
+ *                to accelerate steel ball based on the beam break sensors it passes 
+ *
+ *
+ **************************************************************/
 
 #include "Queue.h"
 
