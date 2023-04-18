@@ -251,9 +251,11 @@ void loop(){
     // setting this timestamp to more recent time to calculate t3 and t4
     second_timestamp = millis();
     calculateElectromagnetActivationTimes();
-    while (activated_electromagnet != true && deactivated_electromagnet != false) {
+    while (activated_electromagnet != true) {
       activated_electromagnet = activateElectromagnet();
-      deactivated_electromagnet = deactivateElectromagnet();
+    }
+    while (deactivated_electromagnet != false) {
+      deactivated_electromagnet = deactivateElectromagnet(); 
     }
   }
 }
