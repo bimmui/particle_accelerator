@@ -1,0 +1,13 @@
+#define MOSPIN 37
+
+void setup() {
+  pinMode(MOSPIN, OUTPUT);
+  Serial.begin(9600);
+}
+
+void loop() {
+  digitalWrite(MOSPIN, HIGH);
+  delay(5000);
+  digitalWrite(MOSPIN, LOW);
+  delay(5000);
+}
