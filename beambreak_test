@@ -1,0 +1,165 @@
+#include "Queue.h"
+
+
+
+#define LEDPIN 13 
+
+// Gate #1
+#define SENSORPIN1 2
+#define SENSORPIN2 3
+
+// Gate #2
+#define SENSORPIN3 4
+#define SENSORPIN4 5
+
+// Gate #3
+#define SENSORPIN5 6
+#define SENSORPIN6 7
+
+// Gate #4
+#define SENSORPIN7 8
+#define SENSORPIN8 9
+
+typedef struct photogate {
+   int sensorpin1;
+   int sensorpin2;
+   char gate_str[6];   
+} photogate;
+
+Queue<photogate> sensor_queue(4);
+
+const int PHOTOGATE_DISTANCE = 33; 
+
+char curr_string[6];
+// defines the first set of sensors the ball encounters
+int curr_sensor1; // entering beam compartment
+int curr_sensorState1 = 0, curr_lastState1 = 0;
+
+// defines the second set of sensors the ball encounters
+int curr_sensor2; // exiting beam compartment
+int curr_sensorState2 = 0, curr_lastState2 = 0;
+
+// used for calcaluting the time at which the ball will first 
+// enter the magnetic field and when it will be at the center of it
+unsigned long first_timestamp = 0, second_timestamp = 0;
+unsigned long time_interval = 0;
+float velocity = 0;
+bool is_velocity_calculated = false;
+
+// the times at which the ball will first enter the mag field
+// and when it will be in the center of it
+float t3 = 0, t4 = 0; 
+
+
+bool calculateVelocity(unsigned long t1, unsigned long t2) {
+  time_interval = t2 - t1;
+  velocity = PHOTOGATE_DISTANCE / (float) time_interval;
+  return true;
+}
+
+
+void setup() {
+  Serial.begin(9600);
+
+  Serial.print("Setting up pin connections..."); 
+  pinMode(LEDPIN, OUTPUT);    
+
+
+  // initialize the sensor pin as an input:
+  // gate #1
+  pinMode(SENSORPIN1, INPUT);     
+  digitalWrite(SENSORPIN1, HIGH); // turn on the pullup
+  pinMode(SENSORPIN2, INPUT);     
+  digitalWrite(SENSORPIN2, HIGH); // turn on the pullup
+
+  // // gate #2
+  // pinMode(SENSORPIN3, INPUT);     
+  // digitalWrite(SENSORPIN3, HIGH); // turn on the pullup
+  // pinMode(SENSORPIN4, INPUT);     
+  // digitalWrite(SENSORPIN4, HIGH); // turn on the pullup
+  
+  // // gate #3
+  // pinMode(SENSORPIN5, INPUT);     
+  // digitalWrite(SENSORPIN5, HIGH); // turn on the pullup
+  // pinMode(SENSORPIN6, INPUT);     
+  // digitalWrite(SENSORPIN6, HIGH); // turn on the pullup
+
+  // // gate #4
+  // pinMode(SENSORPIN7, INPUT);     
+  // digitalWrite(SENSORPIN7, HIGH); // turn on the pullup
+  // pinMode(SENSORPIN8, INPUT);     
+  // digitalWrite(SENSORPIN8, HIGH); // turn on the pullup
+  Serial.println("Complete!");
+
+  Serial.print("Setting up sensor data structures...");
+
+  sensor_queue.push(photogate{SENSORPIN1, SENSORPIN2, "gate 1"});
+  // sensor_queue.push(photogate{SENSORPIN3, SENSORPIN4, "gate 2"});
+  // sensor_queue.push(photogate{SENSORPIN5, SENSORPIN6, "gate 3"});
+  // sensor_queue.push(photogate{SENSORPIN7, SENSORPIN8, "gate 4"});
+
+  photogate temp = sensor_queue.pop();
+  curr_sensor1 = temp.sensorpin1;
+  curr_sensor2 = temp.sensorpin2;
+  strcpy(curr_string, temp.gate_str);
+  Serial.println("Complete!");
+  Serial.println("Program set up complete! Beginning program...");
+}
+
+void loop(){
+  // read the state of the pushbutton value:
+  curr_sensorState1 = digitalRead(curr_sensor1);
+  curr_sensorState2 = digitalRead(curr_sensor2);
+
+  // check if the sensor beam is broken
+  // if it is, the sensorState is LOW:
+  if (curr_sensorState1 == LOW) {     
+    // turn LED on:
+    digitalWrite(LEDPIN, HIGH);  
+  } 
+  else {
+    // turn LED off:
+    digitalWrite(LEDPIN, LOW); 
+  }
+  
+  if (curr_sensorState1 && !curr_lastState1) {
+    Serial.println("Unbroken");
+  } 
+  if (!curr_sensorState1 && curr_lastState1) {
+    Serial.println("Broken");
+    first_timestamp = millis();
+  }
+  curr_lastState1 = curr_sensorState1;
+  
+
+  if (curr_sensorState2 == LOW) {     
+    // turn LED on:
+    digitalWrite(LEDPIN, HIGH);  
+  } 
+  else {
+    // turn LED off:
+    digitalWrite(LEDPIN, LOW); 
+  }
+  
+  if (curr_sensorState2 && !curr_lastState2) {
+    Serial.println("Unbroken2");
+  } 
+  if (!curr_sensorState2 && curr_lastState2) {
+    Serial.println("Broken2");
+    second_timestamp = millis();
+    is_velocity_calculated = calculateVelocity(first_timestamp, second_timestamp);
+    Serial.println("set to true");
+    Serial.println(curr_string);
+  }
+  curr_lastState2 = curr_sensorState2;
+
+  if (is_velocity_calculated == true) {
+    sensor_queue.push(photogate{curr_sensor1, curr_sensor2, 0, 0, 0, 0});
+    photogate temp = sensor_queue.pop();
+    curr_sensor1 = temp.sensorpin1;
+    curr_sensor2 = temp.sensorpin2;    
+    Serial.print("This is it: ");
+    Serial.println(velocity);
+    is_velocity_calculated = false;
+  }
+}
