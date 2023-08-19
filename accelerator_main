@@ -4,7 +4,7 @@
  *
  *     Assignment: Comp Phys Final Project (Phys 68)
  *     Author(s):  Daniel Opara
- *     Date:       4/16/2023
+ *     Date:       7/23/2023
  *
  *     Overview: Driver code for the particle acclerator. Activates electromagnets
  *                to accelerate steel ball based on the photogate it passes 
@@ -30,26 +30,28 @@
 
 // Beambreak sensors, separeated into pairs as inidicated
 // Gate #1
-#define SENSORPIN1 2
-#define SENSORPIN2 3
+#define SENSORPIN1 52
+#define SENSORPIN2 53
 
 // Gate #2
-#define SENSORPIN3 4
-#define SENSORPIN4 5
+#define SENSORPIN3 26
+#define SENSORPIN4 33
 
 // Gate #3
-#define SENSORPIN5 6
-#define SENSORPIN6 7
+#define SENSORPIN5 48
+#define SENSORPIN6 49
 
 // Gate #4
-#define SENSORPIN7 8
-#define SENSORPIN8 9
+#define SENSORPIN7 46
+#define SENSORPIN8 47
 
-const int BEAM_DISTANCE = 33; // millimeters
-// distance from the photogate to the beginning of the magnetic field
-const float MAGNETICE_FIELD_DISTANCE = 50.5; // millimeters
-// distance from the photogate to the center of the magnetic field
-const float MAGNETICE_FIELD_CENTER_DISTANCE = 56.5; // millimeters
+// the radius of the particle acclerator as a whole
+const float ACCELERATOR_RADIUS = 22.5; // centimeters
+// angular separation of the beams within the photogate
+const float BEAM_ANGULAR_DISTANCE = 0.15708; // radians
+
+const float PHOTOGATE_SOLENOID_DISTANCE = 70.6858; // millimeters
+const float PHOTOGATE_SOLENOID_CENTER_DISTANCE = 117.8097; // millimeters
 
 
 
@@ -87,7 +89,8 @@ int curr_electromagnet;
 // enter the magnetic field and when it will be at the center of it
 unsigned long first_timestamp = 0, second_timestamp = 0; // milliseconds
 unsigned long time_interval = 0;
-float velocity = 0; // millimeters per milliseconds
+float velocity = 0; // millimeters per millisecond
+float angular_velocity = 0; // degrees per millisecond
 bool is_velocity_calculated = false;
 
 // the times at which the ball will first enter the mag field
@@ -109,7 +112,8 @@ float t3 = 0, t4 = 0; // milliseconds
 */
 bool calculateVelocity() {
   time_interval = second_timestamp - first_timestamp;
-  velocity = BEAM_DISTANCE / (float) time_interval;
+  angular_velocity = BEAM_ANGULAR_DISTANCE / (float) time_interval;
+  velocity = ACCELERATOR_RADIUS * angular_velocity;
   return true;
 }
 
@@ -121,8 +125,8 @@ bool calculateVelocity() {
 * Effects: Modifies the value stored inside "t3" and "t4"
 */
 void calculateElectromagnetActivationTimes() {
-  t3 = (MAGNETICE_FIELD_DISTANCE / velocity) - 2000;
-  t4 = (MAGNETICE_FIELD_CENTER_DISTANCE / velocity) + 3000;
+  t3 = (PHOTOGATE_SOLENOID_DISTANCE / velocity);
+  t4 = (PHOTOGATE_SOLENOID_CENTER_DISTANCE / velocity);
 }
 
 /*
@@ -150,7 +154,6 @@ bool activateElectromagnet(int mosfet_pin) {
   if (checkTime() < t3) {
     return false;
   } else {
-    Serial.println("Activated electromagnet");
     digitalWrite(mosfet_pin, HIGH);
   }
   return true;
@@ -170,7 +173,6 @@ bool deactivateElectromagnet(int mosfet_pin) {
   if (checkTime() < t4) {
     return true;
   } else {
-    Serial.println("Deactivated electromagnet");
     digitalWrite(mosfet_pin, LOW);
   }
   return false;
@@ -242,52 +244,22 @@ void loop(){
   // read the state of the pushbutton value:
   curr_sensorState1 = digitalRead(curr_sensor1);
   curr_sensorState2 = digitalRead(curr_sensor2);
-
-  // check if the sensor beam is broken
-  // if it is, the sensorState is LOW:
-  if (curr_sensorState1 == LOW) {     
-    // turn LED on:
-    digitalWrite(LEDPIN, HIGH);  
-  } 
-  else {
-    // turn LED off:
-    digitalWrite(LEDPIN, LOW); 
-  }
   
-  if (curr_sensorState1 && !curr_lastState1) {
-    Serial.println("Unbroken");
-  } 
   if (!curr_sensorState1 && curr_lastState1) {
-    Serial.println("Broken");
     first_timestamp = millis();
   }
   curr_lastState1 = curr_sensorState1;
   
-
-  if (curr_sensorState2 == LOW) {     
-    // turn LED on:
-    digitalWrite(LEDPIN, HIGH);  
-  } 
-  else {
-    // turn LED off:
-    digitalWrite(LEDPIN, LOW); 
-  }
-  
-  if (curr_sensorState2 && !curr_lastState2) {
-    Serial.println("Unbroken2");// receiving the beam 
-  } 
   if (!curr_sensorState2 && curr_lastState2) {
-    Serial.println("Broken2"); // something has passed through 
     second_timestamp = millis();
     is_velocity_calculated = calculateVelocity();
-    Serial.println("set to true");
   }
   curr_lastState2 = curr_sensorState2;
 
   if (is_velocity_calculated == true) {    
-    // grabbing the next set of sensor to monitor and pushing the current sensors
-    // to the back of the queue
-    sensor_queue.push(photogateControl{curr_sensor1, curr_sensor2});
+    // pushing the current sensors to the back of the queue
+    // and grabbing the next set of sensor to monitor
+    sensor_queue.push(photogateControl{curr_sensor1, curr_sensor2, curr_electromagnet});
     photogateControl temp = sensor_queue.pop();
     curr_sensor1 = temp.sensorpin1;
     curr_sensor2 = temp.sensorpin2;
@@ -298,8 +270,6 @@ void loop(){
     curr_sensorState2 = 0;
     curr_lastState2 = 0;
 
-    Serial.println("This is it: ");
-    Serial.println(1000000/velocity);
     is_velocity_calculated = false;
     
     bool activated_electromagnet = false;
@@ -307,10 +277,6 @@ void loop(){
     // setting this timestamp to more recent time to calculate t3 and t4
     second_timestamp = millis();
     calculateElectromagnetActivationTimes();
-    Serial.println("Times have been activated");
-    Serial.println(t3);
-    Serial.println(t4);
-    Serial.println(millis());
     while (activated_electromagnet != true) {
       activated_electromagnet = activateElectromagnet(curr_electromagnet);
     }
