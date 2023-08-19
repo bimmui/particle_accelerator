@@ -1,36 +1,40 @@
+/*
+* WARNING: THIS PROGRAM MIGHT NOT WORK FOR YOU, IT WAS MAINLY USED AS A
+* TESTING PLAYGROUND AND WAS OFTEN CHANGED. USE THIS AT YOUR DISCRETION
+*/
+
+
 #include "Queue.h"
-
-
 
 #define LEDPIN 13 
 
 // Gate #1
-#define SENSORPIN1 2
-#define SENSORPIN2 3
+#define SENSORPIN1 52
+#define SENSORPIN2 53
 
 // Gate #2
-#define SENSORPIN3 4
-#define SENSORPIN4 5
+#define SENSORPIN3 26
+#define SENSORPIN4 33
 
 // Gate #3
-#define SENSORPIN5 6
-#define SENSORPIN6 7
+#define SENSORPIN5 48
+#define SENSORPIN6 49
 
 // Gate #4
-#define SENSORPIN7 8
-#define SENSORPIN8 9
+#define SENSORPIN7 46
+#define SENSORPIN8 47
 
 typedef struct photogate {
    int sensorpin1;
    int sensorpin2;
-   char gate_str[6];   
+   int gate;
 } photogate;
 
 Queue<photogate> sensor_queue(4);
+int curr_gate;
 
 const int PHOTOGATE_DISTANCE = 33; 
 
-char curr_string[6];
 // defines the first set of sensors the ball encounters
 int curr_sensor1; // entering beam compartment
 int curr_sensorState1 = 0, curr_lastState1 = 0;
@@ -72,37 +76,44 @@ void setup() {
   pinMode(SENSORPIN2, INPUT);     
   digitalWrite(SENSORPIN2, HIGH); // turn on the pullup
 
-  // // gate #2
-  // pinMode(SENSORPIN3, INPUT);     
-  // digitalWrite(SENSORPIN3, HIGH); // turn on the pullup
-  // pinMode(SENSORPIN4, INPUT);     
-  // digitalWrite(SENSORPIN4, HIGH); // turn on the pullup
+  // gate #2
+  pinMode(SENSORPIN3, INPUT);     
+  digitalWrite(SENSORPIN3, HIGH); // turn on the pullup
+  pinMode(SENSORPIN4, INPUT);     
+  digitalWrite(SENSORPIN4, HIGH); // turn on the pullup
   
   // // gate #3
-  // pinMode(SENSORPIN5, INPUT);     
-  // digitalWrite(SENSORPIN5, HIGH); // turn on the pullup
-  // pinMode(SENSORPIN6, INPUT);     
-  // digitalWrite(SENSORPIN6, HIGH); // turn on the pullup
+  pinMode(SENSORPIN5, INPUT);     
+  digitalWrite(SENSORPIN5, HIGH); // turn on the pullup
+  pinMode(SENSORPIN6, INPUT);     
+  digitalWrite(SENSORPIN6, HIGH); // turn on the pullup
 
   // // gate #4
-  // pinMode(SENSORPIN7, INPUT);     
-  // digitalWrite(SENSORPIN7, HIGH); // turn on the pullup
-  // pinMode(SENSORPIN8, INPUT);     
-  // digitalWrite(SENSORPIN8, HIGH); // turn on the pullup
+  pinMode(SENSORPIN7, INPUT);     
+  digitalWrite(SENSORPIN7, HIGH); // turn on the pullup
+  pinMode(SENSORPIN8, INPUT);     
+  digitalWrite(SENSORPIN8, HIGH); // turn on the pullup
   Serial.println("Complete!");
 
   Serial.print("Setting up sensor data structures...");
 
-  sensor_queue.push(photogate{SENSORPIN1, SENSORPIN2, "gate 1"});
-  // sensor_queue.push(photogate{SENSORPIN3, SENSORPIN4, "gate 2"});
-  // sensor_queue.push(photogate{SENSORPIN5, SENSORPIN6, "gate 3"});
-  // sensor_queue.push(photogate{SENSORPIN7, SENSORPIN8, "gate 4"});
+  pinMode(13, OUTPUT);
+
+  // sensor_queue.push(photogate{SENSORPIN1, SENSORPIN2});
+  sensor_queue.push(photogate{SENSORPIN3, SENSORPIN4, 2});
+  sensor_queue.push(photogate{SENSORPIN5, SENSORPIN6, 3});
+  sensor_queue.push(photogate{SENSORPIN7, SENSORPIN8, 4});
+  curr_gate = 2;
 
   photogate temp = sensor_queue.pop();
   curr_sensor1 = temp.sensorpin1;
   curr_sensor2 = temp.sensorpin2;
-  strcpy(curr_string, temp.gate_str);
   Serial.println("Complete!");
+  Serial.print("Current state: ");
+  Serial.print(" ");
+  Serial.print(curr_sensor1);
+  Serial.print(" ");
+  Serial.println(curr_sensor2);
   Serial.println("Program set up complete! Beginning program...");
 }
 
@@ -113,14 +124,6 @@ void loop(){
 
   // check if the sensor beam is broken
   // if it is, the sensorState is LOW:
-  if (curr_sensorState1 == LOW) {     
-    // turn LED on:
-    digitalWrite(LEDPIN, HIGH);  
-  } 
-  else {
-    // turn LED off:
-    digitalWrite(LEDPIN, LOW); 
-  }
   
   if (curr_sensorState1 && !curr_lastState1) {
     Serial.println("Unbroken");
@@ -131,15 +134,6 @@ void loop(){
   }
   curr_lastState1 = curr_sensorState1;
   
-
-  if (curr_sensorState2 == LOW) {     
-    // turn LED on:
-    digitalWrite(LEDPIN, HIGH);  
-  } 
-  else {
-    // turn LED off:
-    digitalWrite(LEDPIN, LOW); 
-  }
   
   if (curr_sensorState2 && !curr_lastState2) {
     Serial.println("Unbroken2");
@@ -147,19 +141,23 @@ void loop(){
   if (!curr_sensorState2 && curr_lastState2) {
     Serial.println("Broken2");
     second_timestamp = millis();
-    is_velocity_calculated = calculateVelocity(first_timestamp, second_timestamp);
+    is_velocity_calculated = true;
     Serial.println("set to true");
-    Serial.println(curr_string);
   }
   curr_lastState2 = curr_sensorState2;
+  // Serial.print("Current state: ");
+  // Serial.print(" ");
+  // Serial.print(curr_sensor1);
+  // Serial.print(" ");
+  // Serial.println(curr_sensor2);
 
   if (is_velocity_calculated == true) {
-    sensor_queue.push(photogate{curr_sensor1, curr_sensor2, 0, 0, 0, 0});
+    Serial.println(curr_gate);
+    sensor_queue.push(photogate{curr_sensor1, curr_sensor2, curr_gate});
     photogate temp = sensor_queue.pop();
     curr_sensor1 = temp.sensorpin1;
     curr_sensor2 = temp.sensorpin2;    
-    Serial.print("This is it: ");
-    Serial.println(velocity);
+    curr_gate = temp.gate;
     is_velocity_calculated = false;
   }
 }
